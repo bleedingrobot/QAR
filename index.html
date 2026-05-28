@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NZC + QAR Generator</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;700&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ["Lexend", "sans-serif"],
+            body: ["Source Serif 4", "serif"]
+          },
+          colors: {
+            kiwi: {
+              deep: "#073B5A",
+              ocean: "#0A5A7A",
+              teal: "#0F766E",
+              mist: "#E8F4F7",
+              mint: "#D7F5EE",
+              ink: "#1F2937"
+            }
+          },
+          boxShadow: {
+            glow: "0 10px 35px rgba(7,59,90,0.18)"
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      background:
+        radial-gradient(circle at 10% 15%, rgba(15,118,110,0.14) 0%, transparent 35%),
+        radial-gradient(circle at 85% 20%, rgba(10,90,122,0.16) 0%, transparent 40%),
+        linear-gradient(180deg, #f8fcfd 0%, #eef7fa 60%, #e8f4f7 100%);
+    }
+
+    .drop-active {
+      border-color: #0F766E !important;
+      background: #D7F5EE !important;
+    }
+
+    .markdown h1, .markdown h2, .markdown h3 {
+      font-family: Lexend, sans-serif;
+      font-weight: 700;
+      color: #073B5A;
+      margin-top: 0.9rem;
+      margin-bottom: 0.6rem;
+      line-height: 1.2;
+    }
+
+    .markdown h1 { font-size: 1.5rem; }
+    .markdown h2 { font-size: 1.3rem; }
+    .markdown h3 { font-size: 1.15rem; }
+
+    .markdown p {
+      margin: 0.45rem 0;
+      color: #1F2937;
+      line-height: 1.6;
+    }
+
+    .markdown ul {
+      margin: 0.4rem 0 0.7rem 1.1rem;
+      list-style: disc;
+    }
+
+    .markdown li {
+      margin: 0.2rem 0;
+      line-height: 1.5;
+      color: #1F2937;
+    }
+
+    .markdown strong { color: #073B5A; }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 4px solid #BFE9E0;
+      border-top-color: #0F766E;
+      border-radius: 9999px;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="font-body text-kiwi-ink">
+  <main class="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-10">
+    <section class="relative overflow-hidden rounded-3xl shadow-glow border border-white/70 bg-white/90 backdrop-blur-sm p-5 md:p-7">
+      <div class="absolute -top-10 -right-10 w-36 h-36 bg-kiwi-mint rounded-full blur-3xl opacity-50"></div>
+      <div class="absolute -bottom-12 -left-10 w-40 h-40 bg-cyan-100 rounded-full blur-3xl opacity-60"></div>
+
+      <div class="relative">
+        <h1 class="font-display text-2xl md:text-3xl font-bold text-kiwi-deep">NZC Curriculum Links + QAR Question Generator</h1>
+        <p class="mt-2 text-slate-700 max-w-3xl">
+          Upload a reading PDF or image, then generate curriculum alignment and QAR questions in seconds.
+        </p>
+
+        <div class="mt-6 rounded-2xl border border-teal-200 bg-teal-50/80 p-4 md:p-5">
+          <h2 class="font-display text-lg font-semibold text-kiwi-deep">API Key Configuration</h2>
+          <p class="text-sm text-slate-700 mt-1">
+            Enter your Google AI Studio Gemini API key. It is saved in local browser storage on this device.
+            Get a free key at
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="underline font-semibold text-kiwi-ocean">Google AI Studio</a>.
+          </p>
+
+          <div class="mt-3 flex flex-col md:flex-row gap-3">
+            <input id="apiKeyInput" type="password" placeholder="Paste Gemini API key here" class="w-full md:flex-1 rounded-xl border border-teal-300 bg-white px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+            <button id="saveKeyBtn" class="rounded-xl bg-kiwi-deep hover:bg-kiwi-ocean text-white font-display font-semibold px-5 py-3 transition">Save Key</button>
+            <button id="clearKeyBtn" class="rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-display font-semibold px-5 py-3 transition">Clear Key</button>
+          </div>
+
+          <p id="keyStatus" class="mt-2 text-sm text-slate-700"></p>
+        </div>
+
+        <div class="mt-6">
+          <label for="fileInput" class="block font-display font-semibold text-kiwi-deep mb-2">Upload Reading Material</label>
+          <div id="dropZone" class="rounded-2xl border-2 border-dashed border-cyan-300 bg-cyan-50/70 p-6 md:p-8 text-center transition">
+            <p class="font-display text-lg text-kiwi-deep">Drag and drop your file here</p>
+            <p class="text-sm text-slate-700 mt-1">Supports PDF, PNG, JPG, JPEG (max 15 MB)</p>
+            <input id="fileInput" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" class="hidden" />
+            <button id="browseBtn" class="mt-4 rounded-xl bg-kiwi-teal hover:bg-emerald-700 text-white font-display font-semibold px-5 py-3 transition">Choose File</button>
+            <p id="fileName" class="mt-3 text-sm text-slate-800"></p>
+          </div>
+        </div>
+
+        <div class="mt-5 flex flex-col sm:flex-row gap-3">
+          <button id="generateBtn" class="rounded-xl bg-kiwi-deep hover:bg-kiwi-ocean text-white font-display font-semibold px-6 py-3 transition disabled:opacity-50 disabled:cursor-not-allowed">Generate NZC Links and QAR Questions</button>
+          <button id="copyBtn" class="rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-display font-semibold px-6 py-3 transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Copy to Clipboard</button>
+        </div>
+
+        <div id="loadingWrap" class="hidden mt-6 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+          <div class="flex items-center gap-3">
+            <div class="spinner"></div>
+            <div>
+              <p class="font-display font-semibold text-kiwi-deep">Generating teaching-ready output...</p>
+              <p id="loadingMessage" class="text-sm text-slate-700 mt-1">Reading the text...</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="errorBox" class="hidden mt-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm"></div>
+
+        <section class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 class="font-display text-xl font-bold text-kiwi-deep">NZC Links</h3>
+            <div id="nzcOutput" class="markdown mt-3 text-slate-800">
+              <p>Generated NZC alignment will appear here.</p>
+            </div>
+          </article>
+
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 class="font-display text-xl font-bold text-kiwi-deep">QAR Questions</h3>
+            <div id="qarOutput" class="markdown mt-3 text-slate-800">
+              <p>Generated QAR questions will appear here.</p>
+            </div>
+          </article>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var STORAGE_KEY = "nz_teacher_gemini_api_key";
+      var MAX_FILE_BYTES = 15 * 1024 * 1024;
+      var selectedFile = null;
+      var fullMarkdownOutput = "";
+      var loadingMessages = [
+        "Reading the text...",
+        "Mapping to NZC...",
+        "Crafting QAR questions...",
+        "Refining classroom-ready formatting..."
+      ];
+      var loadingTimer = null;
+      var loadingIndex = 0;
+
+      var apiKeyInput = document.getElementById("apiKeyInput");
+      var saveKeyBtn = document.getElementById("saveKeyBtn");
+      var clearKeyBtn = document.getElementById("clearKeyBtn");
+      var keyStatus = document.getElementById("keyStatus");
+
+      var dropZone = document.getElementById("dropZone");
+      var fileInput = document.getElementById("fileInput");
+      var browseBtn = document.getElementById("browseBtn");
+      var fileName = document.getElementById("fileName");
+
+      var generateBtn = document.getElementById("generateBtn");
+      var copyBtn = document.getElementById("copyBtn");
+      var loadingWrap = document.getElementById("loadingWrap");
+      var loadingMessage = document.getElementById("loadingMessage");
+      var errorBox = document.getElementById("errorBox");
+
+      var nzcOutput = document.getElementById("nzcOutput");
+      var qarOutput = document.getElementById("qarOutput");
+
+      function init() {
+        var existing = localStorage.getItem(STORAGE_KEY);
+        if (existing) {
+          apiKeyInput.value = existing;
+          keyStatus.textContent = "API key loaded from local browser storage.";
+        } else {
+          keyStatus.textContent = "No API key saved yet.";
+        }
+      }
+
+      function showError(message) {
+        errorBox.textContent = message;
+        errorBox.classList.remove("hidden");
+      }
+
+      function clearError() {
+        errorBox.textContent = "";
+        errorBox.classList.add("hidden");
+      }
+
+      function setLoading(loading) {
+        if (loading) {
+          loadingWrap.classList.remove("hidden");
+          generateBtn.disabled = true;
+          copyBtn.disabled = true;
+          loadingIndex = 0;
+          loadingMessage.textContent = loadingMessages[loadingIndex];
+
+          loadingTimer = setInterval(function () {
+            loadingIndex = (loadingIndex + 1) % loadingMessages.length;
+            loadingMessage.textContent = loadingMessages[loadingIndex];
+          }, 1800);
+        } else {
+          loadingWrap.classList.add("hidden");
+          generateBtn.disabled = false;
+          copyBtn.disabled = !fullMarkdownOutput;
+          if (loadingTimer) {
+            clearInterval(loadingTimer);
+            loadingTimer = null;
+          }
+        }
+      }
+
+      function validateFile(file) {
+        if (!file) return "Please choose a file first.";
+
+        var allowed = ["application/pdf", "image/png", "image/jpeg"];
+        if (allowed.indexOf(file.type) === -1) {
+          return "Unsupported file type. Please upload PDF, PNG, JPG, or JPEG.";
+        }
+
+        if (file.size > MAX_FILE_BYTES) {
+          return "File is too large. Maximum supported size is 15 MB.";
+        }
+
+        return "";
+      }
+
+      function setSelectedFile(file) {
+        var err = validateFile(file);
+        if (err) {
+          selectedFile = null;
+          fileName.textContent = "";
+          showError(err);
+          return;
+        }
+
+        clearError();
+        selectedFile = file;
+        fileName.textContent = "Selected: " + file.name + " (" + (file.size / 1024 / 1024).toFixed(2) + " MB)";
+      }
+
+      // Convert a PDF/image into Base64 in-browser with FileReader.
+      // readAsDataURL returns a data URL string, for example:
+      // data:application/pdf;base64,JVBERi0xLjQKJ...
+      // We split by comma and keep only the Base64 payload for Gemini inline_data.
+      function fileToBase64(file) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+
+          reader.onload = function (event) {
+            try {
+              var dataUrl = event.target.result || "";
+              var comma = dataUrl.indexOf(",");
+              if (comma === -1) {
+                reject(new Error("Failed to parse file data for Base64 conversion."));
+                return;
+              }
+              resolve(dataUrl.slice(comma + 1));
+            } catch (err) {
+              reject(err);
+            }
+          };
+
+          reader.onerror = function () {
+            reject(new Error("Unable to read the selected file."));
+          };
+
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function escapeHtml(text) {
+        return (text || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function markdownToHtml(markdown) {
+        var lines = (markdown || "").split("\n");
+        var html = [];
+        var inList = false;
+
+        for (var i = 0; i < lines.length; i++) {
+          var line = escapeHtml(lines[i].trimRight());
+          var trimmed = line.trim();
+
+          if (!trimmed) {
+            if (inList) {
+              html.push("</ul>");
+              inList = false;
+            }
+            continue;
+          }
+
+          if (/^###\s+/.test(trimmed)) {
+            if (inList) { html.push("</ul>"); inList = false; }
+            html.push("<h3>" + trimmed.replace(/^###\s+/, "") + "</h3>");
+            continue;
+          }
+
+          if (/^##\s+/.test(trimmed)) {
+            if (inList) { html.push("</ul>"); inList = false; }
+            html.push("<h2>" + trimmed.replace(/^##\s+/, "") + "</h2>");
+            continue;
+          }
+
+          if (/^#\s+/.test(trimmed)) {
+            if (inList) { html.push("</ul>"); inList = false; }
+            html.push("<h1>" + trimmed.replace(/^#\s+/, "") + "</h1>");
+            continue;
+          }
+
+          if (/^[-*]\s+/.test(trimmed)) {
+            if (!inList) {
+              html.push("<ul>");
+              inList = true;
+            }
+            html.push("<li>" + trimmed.replace(/^[-*]\s+/, "") + "</li>");
+            continue;
+          }
+
+          if (inList) {
+            html.push("</ul>");
+            inList = false;
+          }
+
+          var withBold = trimmed.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+          html.push("<p>" + withBold + "</p>");
+        }
+
+        if (inList) {
+          html.push("</ul>");
+        }
+
+        return html.join("\n");
+      }
+
+      function splitSections(markdown) {
+        var text = markdown || "";
+
+        var nzcMatch = text.match(/(?:^|\n)(?:#|##|###)?\s*\**\s*New Zealand Curriculum[\s\S]*?(?=(?:\n(?:#|##|###)?\s*\**\s*QAR|\n2\.\s*\*\*QAR|$))/i);
+        var qarMatch = text.match(/(?:^|\n)(?:(?:#|##|###)?\s*\**\s*QAR|2\.\s*\*\*QAR)[\s\S]*/i);
+
+        var nzc = nzcMatch ? nzcMatch[0].trim() : "";
+        var qar = qarMatch ? qarMatch[0].trim() : "";
+
+        if (!nzc || !qar) {
+          var nzcAlt = text.match(/1\.\s*\*\*New Zealand Curriculum[\s\S]*?(?=2\.\s*\*\*QAR|$)/i);
+          var qarAlt = text.match(/2\.\s*\*\*QAR[\s\S]*/i);
+          if (!nzc && nzcAlt) nzc = nzcAlt[0].trim();
+          if (!qar && qarAlt) qar = qarAlt[0].trim();
+        }
+
+        if (!nzc && !qar) {
+          return {
+            nzc: text,
+            qar: "Could not isolate a separate QAR section. Review the full output in NZC Links."
+          };
+        }
+
+        return { nzc: nzc, qar: qar };
+      }
+
+      function buildSystemPrompt() {
+        return [
+          "You are an expert New Zealand primary and secondary school educator. Analyze the attached document/image and output the following sections formatted cleanly in Markdown:",
+          "",
+          "1. **New Zealand Curriculum (NZC) Alignment:**",
+          "   - Identify the primary Learning Area (e.g., English, Science, Social Sciences).",
+          "   - Suggest the appropriate NZC Level (Levels 1 through 5) based on text complexity.",
+          "   - List 2-3 specific Strategic Objectives / Achievement Objectives relevant to the text.",
+          "   - Provide 2 Key Competencies fostered by this reading task (e.g., Thinking, Using language, symbols, and texts).",
+          "",
+          "2. **QAR (Question-Answer Relationship) Questions:**",
+          "   Generate exactly 4 questions based strictly on the text, explicitly labeled under the 4 QAR quadrants:",
+          "   - **Right There (In the Text):** Literal question where the answer is found in one single sentence.",
+          "   - **Think and Search (In the Text):** Inferential question where the answer is in the text, but requires looking in multiple places or combining clues.",
+          "   - **Author and Me (In my Head):** A question requiring the student to use text information combined with their own prior background knowledge.",
+          "   - **On My Own (In my Head):** A thematic/creative extension question that can be answered without reading the text, relying entirely on the student's own experiences."
+        ].join("\n");
+      }
+
+      async function generate() {
+        clearError();
+
+        var apiKey = (apiKeyInput.value || "").trim();
+        if (!apiKey) {
+          showError("Please enter your Gemini API key.");
+          return;
+        }
+
+        var fileErr = validateFile(selectedFile);
+        if (fileErr) {
+          showError(fileErr);
+          return;
+        }
+
+        setLoading(true);
+
+        try {
+          var base64Data = await fileToBase64(selectedFile);
+          var endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey);
+
+          // Gemini multimodal payload details:
+          // 1) system_instruction includes the strict NZC + QAR prompt.
+          // 2) inline_data carries the uploaded PDF or image as Base64 data.
+          // 3) mime_type must match the uploaded file type.
+          var payload = {
+            system_instruction: {
+              parts: [{ text: buildSystemPrompt() }]
+            },
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { text: "Please analyze this student reading material and return the exact requested NZC and QAR structure in Markdown." },
+                  {
+                    inline_data: {
+                      mime_type: selectedFile.type,
+                      data: base64Data
+                    }
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.4,
+              topP: 0.9,
+              maxOutputTokens: 1800
+            }
+          };
+
+          var response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          var json = await response.json();
+
+          if (!response.ok) {
+            var message = "Gemini request failed.";
+            if (json && json.error && json.error.message) {
+              message = json.error.message;
+            }
+            if (response.status === 401 || response.status === 403) {
+              message = "Invalid or unauthorized API key. Please check your key and try again.";
+            }
+            throw new Error(message);
+          }
+
+          var content = "";
+          if (
+            json &&
+            json.candidates &&
+            json.candidates[0] &&
+            json.candidates[0].content &&
+            json.candidates[0].content.parts &&
+            json.candidates[0].content.parts[0] &&
+            json.candidates[0].content.parts[0].text
+          ) {
+            content = json.candidates[0].content.parts[0].text;
+          }
+
+          if (!content) {
+            throw new Error("No text was returned by Gemini. Please try again.");
+          }
+
+          fullMarkdownOutput = content;
+          var split = splitSections(content);
+          nzcOutput.innerHTML = markdownToHtml(split.nzc);
+          qarOutput.innerHTML = markdownToHtml(split.qar);
+          copyBtn.disabled = false;
+        } catch (err) {
+          showError(err && err.message ? err.message : "Something went wrong while generating the response.");
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function copyAll() {
+        if (!fullMarkdownOutput) return;
+
+        try {
+          await navigator.clipboard.writeText(fullMarkdownOutput);
+          copyBtn.textContent = "Copied";
+          setTimeout(function () {
+            copyBtn.textContent = "Copy to Clipboard";
+          }, 1400);
+        } catch (_err) {
+          showError("Clipboard access failed. You can manually copy from the output panels.");
+        }
+      }
+
+      saveKeyBtn.addEventListener("click", function () {
+        var key = (apiKeyInput.value || "").trim();
+        if (!key) {
+          showError("Please enter a key before saving.");
+          return;
+        }
+
+        localStorage.setItem(STORAGE_KEY, key);
+        clearError();
+        keyStatus.textContent = "API key saved in local browser storage.";
+      });
+
+      clearKeyBtn.addEventListener("click", function () {
+        localStorage.removeItem(STORAGE_KEY);
+        apiKeyInput.value = "";
+        keyStatus.textContent = "Saved API key cleared.";
+      });
+
+      browseBtn.addEventListener("click", function () {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", function (event) {
+        var file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+        setSelectedFile(file);
+      });
+
+      dropZone.addEventListener("dragover", function (event) {
+        event.preventDefault();
+        dropZone.classList.add("drop-active");
+      });
+
+      dropZone.addEventListener("dragleave", function () {
+        dropZone.classList.remove("drop-active");
+      });
+
+      dropZone.addEventListener("drop", function (event) {
+        event.preventDefault();
+        dropZone.classList.remove("drop-active");
+        var file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0] ? event.dataTransfer.files[0] : null;
+        setSelectedFile(file);
+      });
+
+      generateBtn.addEventListener("click", generate);
+      copyBtn.addEventListener("click", copyAll);
+
+      init();
+    })();
+  </script>
+</body>
+</html>
