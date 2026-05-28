@@ -102,7 +102,7 @@
       <div class="relative">
         <h1 class="font-display text-2xl md:text-3xl font-bold text-kiwi-deep">NZC Curriculum Links + QAR Question Generator</h1>
         <p class="mt-2 text-slate-700 max-w-3xl">
-          Upload a reading PDF or image, then generate curriculum alignment and QAR questions in seconds.
+          Upload student reading material plus your own curriculum reference documents. Alignment links will be generated only from your uploaded curriculum files.
         </p>
 
         <div class="mt-6 rounded-2xl border border-teal-200 bg-teal-50/80 p-4 md:p-5">
@@ -131,6 +131,23 @@
             <button id="browseBtn" class="mt-4 rounded-xl bg-kiwi-teal hover:bg-emerald-700 text-white font-display font-semibold px-5 py-3 transition">Choose File</button>
             <p id="fileName" class="mt-3 text-sm text-slate-800"></p>
           </div>
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-teal-200 bg-teal-50/70 p-5">
+          <label for="curriculumInput" class="block font-display font-semibold text-kiwi-deep mb-2">Upload Curriculum Reference Documents</label>
+          <p class="text-sm text-slate-700">
+            Add your own NZ curriculum files (PDF, PNG, JPG). The app will use only these uploaded references for NZC alignment.
+          </p>
+          <input id="curriculumInput" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" class="hidden" />
+          <div class="mt-3 flex flex-wrap gap-3">
+            <button id="curriculumBrowseBtn" class="rounded-xl bg-kiwi-teal hover:bg-emerald-700 text-white font-display font-semibold px-5 py-3 transition">
+              Add Curriculum Files
+            </button>
+            <button id="curriculumClearBtn" class="rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-display font-semibold px-5 py-3 transition">
+              Clear Curriculum Files
+            </button>
+          </div>
+          <p id="curriculumFileSummary" class="mt-3 text-sm text-slate-800">No curriculum files selected yet.</p>
         </div>
 
         <div class="mt-5 flex flex-col sm:flex-row gap-3">
@@ -175,10 +192,14 @@
 
       var STORAGE_KEY = "nz_teacher_gemini_api_key";
       var MAX_FILE_BYTES = 15 * 1024 * 1024;
+      var MAX_CURRICULUM_FILES = 6;
+      var MAX_TOTAL_CURRICULUM_BYTES = 30 * 1024 * 1024;
       var selectedFile = null;
+      var curriculumFiles = [];
       var fullMarkdownOutput = "";
       var loadingMessages = [
         "Reading the text...",
+        "Reading curriculum references...",
         "Mapping to NZC...",
         "Crafting QAR questions...",
         "Refining classroom-ready formatting..."
@@ -195,6 +216,11 @@
       var fileInput = document.getElementById("fileInput");
       var browseBtn = document.getElementById("browseBtn");
       var fileName = document.getElementById("fileName");
+
+      var curriculumInput = document.getElementById("curriculumInput");
+      var curriculumBrowseBtn = document.getElementById("curriculumBrowseBtn");
+      var curriculumClearBtn = document.getElementById("curriculumClearBtn");
+      var curriculumFileSummary = document.getElementById("curriculumFileSummary");
 
       var generateBtn = document.getElementById("generateBtn");
       var copyBtn = document.getElementById("copyBtn");
@@ -263,6 +289,29 @@
         return "";
       }
 
+      function validateCurriculumFiles(files) {
+        if (!files || files.length === 0) {
+          return "Please upload at least one curriculum reference file.";
+        }
+
+        if (files.length > MAX_CURRICULUM_FILES) {
+          return "Too many curriculum files. Maximum supported is " + MAX_CURRICULUM_FILES + " files.";
+        }
+
+        var totalBytes = 0;
+        for (var i = 0; i < files.length; i++) {
+          var err = validateFile(files[i]);
+          if (err) return "Curriculum file error: " + err;
+          totalBytes += files[i].size;
+        }
+
+        if (totalBytes > MAX_TOTAL_CURRICULUM_BYTES) {
+          return "Curriculum files are too large in total. Maximum combined size is 30 MB.";
+        }
+
+        return "";
+      }
+
       function setSelectedFile(file) {
         var err = validateFile(file);
         if (err) {
@@ -275,6 +324,37 @@
         clearError();
         selectedFile = file;
         fileName.textContent = "Selected: " + file.name + " (" + (file.size / 1024 / 1024).toFixed(2) + " MB)";
+      }
+
+      function updateCurriculumSummary() {
+        if (!curriculumFiles.length) {
+          curriculumFileSummary.textContent = "No curriculum files selected yet.";
+          return;
+        }
+
+        var totalBytes = 0;
+        var names = [];
+        for (var i = 0; i < curriculumFiles.length; i++) {
+          totalBytes += curriculumFiles[i].size;
+          names.push(curriculumFiles[i].name);
+        }
+
+        curriculumFileSummary.textContent = "Selected " + curriculumFiles.length + " file(s), " + (totalBytes / 1024 / 1024).toFixed(2) + " MB total: " + names.join(", ");
+      }
+
+      function setCurriculumFiles(fileList) {
+        var files = Array.prototype.slice.call(fileList || []);
+        var err = validateCurriculumFiles(files);
+        if (err) {
+          curriculumFiles = [];
+          updateCurriculumSummary();
+          showError(err);
+          return;
+        }
+
+        clearError();
+        curriculumFiles = files;
+        updateCurriculumSummary();
       }
 
       // Convert a PDF/image into Base64 in-browser with FileReader.
@@ -402,12 +482,16 @@
 
       function buildSystemPrompt() {
         return [
-          "You are an expert New Zealand primary and secondary school educator. Analyze the attached document/image and output the following sections formatted cleanly in Markdown:",
+          "You are an expert New Zealand primary and secondary school educator.",
+          "You will receive one student reading material file and one or more curriculum reference files.",
+          "For NZC alignment, you must use only the uploaded curriculum reference files and not outside knowledge.",
+          "If the curriculum references do not contain enough evidence, explicitly state: Insufficient evidence from uploaded curriculum references.",
+          "Analyze the files and output the following sections formatted cleanly in Markdown:",
           "",
           "1. **New Zealand Curriculum (NZC) Alignment:**",
           "   - Identify the primary Learning Area (e.g., English, Science, Social Sciences).",
           "   - Suggest the appropriate NZC Level (Levels 1 through 5) based on text complexity.",
-          "   - List 2-3 specific Strategic Objectives / Achievement Objectives relevant to the text.",
+          "   - List 2-3 specific Strategic Objectives / Achievement Objectives from the uploaded curriculum references that are relevant to the student text.",
           "   - Provide 2 Key Competencies fostered by this reading task (e.g., Thinking, Using language, symbols, and texts).",
           "",
           "2. **QAR (Question-Answer Relationship) Questions:**",
@@ -415,7 +499,9 @@
           "   - **Right There (In the Text):** Literal question where the answer is found in one single sentence.",
           "   - **Think and Search (In the Text):** Inferential question where the answer is in the text, but requires looking in multiple places or combining clues.",
           "   - **Author and Me (In my Head):** A question requiring the student to use text information combined with their own prior background knowledge.",
-          "   - **On My Own (In my Head):** A thematic/creative extension question that can be answered without reading the text, relying entirely on the student's own experiences."
+          "   - **On My Own (In my Head):** A thematic/creative extension question that can be answered without reading the text, relying entirely on the student's own experiences.",
+          "",
+          "Also include a short final subsection titled **Evidence from Uploaded Curriculum References** listing which uploaded curriculum file names were used."
         ].join("\n");
       }
 
@@ -434,10 +520,27 @@
           return;
         }
 
+        var curriculumErr = validateCurriculumFiles(curriculumFiles);
+        if (curriculumErr) {
+          showError(curriculumErr);
+          return;
+        }
+
         setLoading(true);
 
         try {
           var base64Data = await fileToBase64(selectedFile);
+          var curriculumInlineParts = [];
+          for (var i = 0; i < curriculumFiles.length; i++) {
+            var curriculumBase64 = await fileToBase64(curriculumFiles[i]);
+            curriculumInlineParts.push({ text: "Curriculum reference file: " + curriculumFiles[i].name });
+            curriculumInlineParts.push({
+              inline_data: {
+                mime_type: curriculumFiles[i].type,
+                data: curriculumBase64
+              }
+            });
+          }
           var endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey);
 
           // Gemini multimodal payload details:
@@ -452,13 +555,14 @@
               {
                 role: "user",
                 parts: [
-                  { text: "Please analyze this student reading material and return the exact requested NZC and QAR structure in Markdown." },
+                  { text: "Student reading material file:" },
                   {
                     inline_data: {
                       mime_type: selectedFile.type,
                       data: base64Data
                     }
-                  }
+                  },
+                  { text: "Use only the following uploaded curriculum references for NZC alignment decisions:" }
                 ]
               }
             ],
@@ -468,6 +572,8 @@
               maxOutputTokens: 1800
             }
           };
+
+          payload.contents[0].parts = payload.contents[0].parts.concat(curriculumInlineParts);
 
           var response = await fetch(endpoint, {
             method: "POST",
@@ -556,6 +662,20 @@
       fileInput.addEventListener("change", function (event) {
         var file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
         setSelectedFile(file);
+      });
+
+      curriculumBrowseBtn.addEventListener("click", function () {
+        curriculumInput.click();
+      });
+
+      curriculumInput.addEventListener("change", function (event) {
+        setCurriculumFiles(event.target.files);
+      });
+
+      curriculumClearBtn.addEventListener("click", function () {
+        curriculumFiles = [];
+        curriculumInput.value = "";
+        updateCurriculumSummary();
       });
 
       dropZone.addEventListener("dragover", function (event) {
